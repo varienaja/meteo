@@ -1,0 +1,7 @@
+https://www.meteoschweiz.admin.ch/product/output/measured-values/stationsTable/messwerte-lufttemperatur-10min/stationsTable.messwerte-lufttemperatur-10min.de.json
+https://www.meteoschweiz.admin.ch/product/output/measured-values/stationsTable/messwerte-niederschlag-10min/stationsTable.messwerte-niederschlag-10min.de.json
+https://www.meteoschweiz.admin.ch/product/output/measured-values/stationsTable/messwerte-windgeschwindigkeit-kmh-10min/stationsTable.messwerte-windgeschwindigkeit-kmh-10min.de.json
+https://www.meteoschweiz.admin.ch/product/output/measured-values/stationsTable/messwerte-sonnenscheindauer-10min/stationsTable.messwerte-sonnenscheindauer-10min.de.json
+https://www.meteoschweiz.admin.ch/product/output/measured-values/stationsTable/messwerte-luftfeuchtigkeit-10min/stationsTable.messwerte-luftfeuchtigkeit-10min.de.json
+https://www.meteoschweiz.admin.ch/product/output/measured-values/stationsTable/messwerte-globalstrahlung-10min/stationsTable.messwerte-globalstrahlung-10min.de.json
+https://www.meteoschweiz.admin.ch/product/output/measured-values/stationsTable/messwerte-luftdruck-qfe-10min/stationsTable.messwerte-luftdruck-qfe-10min.de.json
