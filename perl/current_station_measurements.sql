@@ -4,10 +4,11 @@ from
    from sensor s, measurement m
    where m.sensor_id=s.id
    and m.moment>=current_date
-   and code='PSI'
+   and code=?
    order by s.id, s.code, s.name, s.unit, m.moment desc) sub, measurement m
 where m.sensor_id=sub.id
 and m.moment>=current_date
 group by sub.id, sub.code, sub.name, sub.unit, sub.moment, sub.value
+order by sub.unit
 
 --Hmmm for precipitation and sunshine we need the sum rather than the maximum
