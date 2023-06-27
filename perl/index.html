@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<meta charset="UTF-8">
+
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular.min.js"></script>
+<body>
+
+
+
+
+<!--
+TODO: insert interpolations, if we don't have a measurement for every 10-minute timeslice
+TODO: Show moments of last rain, last sunshine, last time above 30, last time above 20, last time below 0?
+TODO: When new day starts: remove all measurements.
+TODO: Add sample to each tile: red dots for temp, blue for humidity, etc.
+TODO: Make minimum/maximum for sunshine and precipitation tiles first and last measurement.
+TODO: If current time = min/max-timeon a tile: mark it bold_ font-weight="bold" or "normal", depending on .hh and .mm being equal to current.hh and current.mm <- add these vars, also to be able to detect turnover at midnight
+TODO: Add bigger circle for min/max too?
+
+Show all kinds of interactive and self-updating thingies: top-x lists; 
+
+-->
+
+<div class="all" ng-app="myApp" ng-controller="weatherController">
+
+<style>
+.small {
+//  font: 1vw sans-serif;
+  fill: black;
+  text-anchor: middle;
+}
+.big {
+//  font: 1vw sans-serif;
+  fill: black;
+  text-anchor: middle;
+}
+.legend {
+  fill: black;
+  text-anchor: end;
+}
+
+@media (min-width: 0px) {
+  .small {
+     display: initial;
+  }
+  .big {
+    display: none;
+  }
+}
+
+@media (min-width: 1300px) {
+  .small {
+     display: none;
+  }
+  .big {
+    display: initial;
+  }
+}
+
+div {
+  float: left;
+}
+.all {
+  width: 100%;
+}
+.right {
+  width: {{legendwidth}}px;
+}
+.left {
+  width: {{legendwidth}}px;
+}
+.middle {
+  width: calc(100% - {{legendwidth}}px - {{legendwidth}}px);
+}
+</style>
+
+<h2>Measurements in {{code}} on {{currentdate | date:'dd-MM-yyyy'}}</h2>
+
+<!-- SVG -->
+
+<div class="left">
+	<svg width="100%" height={{graphheight}}>
+		<rect x=0 y=0 width=100% height=100% fill=lightgray></rect>
+		<text class="legend" x="40" y="15">°C</text>
+		<!-- TODO if height is different: adapt repeat thingy. -->
+		<text ng-repeat="i in [30,60,90,120,150,180,210]" class="legend" x="40" y={{i+5}}>{{(i-150)/-3}}</text>
+	</svg>
+</div>
+
+<div class="middle">
+	<svg width=100% height={{graphheight}}>
+		<rect x=0 y=0 width=100% height=100% fill=lightgray></rect>
+		<style>
+			rect:hover {stroke: blue}
+			circle:hover {stroke: red}
+		</style>
+		<line x1=0% y1=0 x2=0% y2=240 stroke=gray />
+		<line x1=100% y1=0 x2=100% y2=240 stroke=gray />
+		<line x1=0% y1={{i}} x2=100% y2={{i}} stroke=gray ng-repeat="i in [0,30,60,90,120,150,180,210]"/>
+		<line x1={{i*100/24}}% y1=0 x2={{i*100/24}}% y2=210 stroke=gray ng-repeat="i in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]"/>
+		<text class=small x={{i*100/24}}% y=240 ng-repeat="i in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]">{{i}}</text>
+		<text class=big x={{i*100/24}}% y=240 ng-repeat="i in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]">{{i}}:00</text>
+
+		<!-- Sunshine -->
+		<rect x="{{100/24*(x.hh+x.mm/60) - 1/3}}%" y="202" height="8" width="{{x.value*1/14.4}}%" fill=yellow ng-repeat="x in measurements['min']"><title>{{x.hh}}:{{x.mm}} {{x.value}}{{x.unit}}</title></rect>
+
+		<!-- Radiation -->
+		<rect x="{{100/24*(x.hh+x.mm/60) - 1/6}}%" y="1" height={{x.value*.12}} width=".5%" fill=orange ng-repeat="x in measurements['W/m²']"><title>{{x.hh}}:{{x.mm}} {{x.value}}{{x.unit}}</title></rect>
+
+		<!-- Pressure -->
+		<line ng-repeat="x in measurements['hPa']" ng-hide="$first" x1="{{toX(measurements['hPa'][$index-1].hh, measurements['hPa'][$index-1].mm)}}" x2="to{{toX(x.hh, x.mm)}}" y1="{{330-measurements['hPa'][$index-1].value*.3}}" y2="{{330-x.value*.3}}" stroke=black></line>
+		<circle cx="{{toX(x.hh, x.mm)}}" cy={{330-x.value*.3}} r="2" fill=black ng-repeat="x in measurements['hPa']"><title>{{x.hh}}:{{x.mm}} {{x.value}}{{x.unit}}</title></circle>
+
+		<!-- Humidity -->
+		<line ng-repeat="x in measurements['%']" ng-hide="$first" x1="{{toX(measurements['%'][$index-1].hh, measurements['%'][$index-1].mm)}}" x2="{{toX(x.hh,x.mm)}}" y1="{{150-measurements['%'][$index-1].value*1.5}}" y2="{{150-x.value*1.5}}" stroke=deepskyblue></line>
+		<circle cx="{{toX(x.hh, x.mm)}}" cy={{150-x.value*1.5}} r="{{2 + (x.value==minmax['%'].min || x.value==minmax['%'].max ? 1 : 0)}}" fill=deepskyblue ng-repeat="x in measurements['%']"><title>{{x.hh}}:{{x.mm}} {{x.value}}{{x.unit}}</title></circle>
+		<line x1="100%" y1="{{150-minmax['%'].min*1.5}}" x2="100%" y2="{{150-minmax['%'].max*1.5}}" stroke=deepskyblue stroke-width=8><title>Humidity: {{minmax['%'].min}}...{{minmax['%'].max}}%</title></line>
+
+		<!-- Wind -->
+		<line ng-repeat="x in measurements['km/h']" ng-hide="$first" x1="{{toX(measurements['km/h'][$index-1].hh, measurements['km/h'][$index-1].mm)}}" x2="{{toX(x.hh,x.mm)}}" y1="{{210-measurements['km/h'][$index-1].value*1.5}}" y2="{{210-x.value*1.5}}" stroke=green></line>
+		<circle cx="{{toX(x.hh, x.mm)}}" cy={{210-x.value*1.5}} r="{{3 + (x.value==minmax['km/h'].min || x.value==minmax['km/h'].max ? 1 : 0)}}" fill=green ng-repeat="x in measurements['km/h']"><title>{{x.hh}}:{{x.mm}} {{x.value}}{{x.unit}}</title></circle>
+		<line x1="100%" y1="{{210-minmax['km/h'].min*1.5}}" x2="100%" y2="{{210-minmax['km/h'].max*1.5}}" stroke=green stroke-width=8><title>Wind: {{minmax['km/h'].min}}...{{minmax['km/h'].max}}km/h</title></line>
+
+		<!-- Temperature -->
+		<line ng-repeat="x in measurements['°C']" ng-hide="$first" x1="{{toX(measurements['°C'][$index-1].hh, measurements['°C'][$index-1].mm)}}" x2="{{toX(x.hh,x.mm)}}" y1="{{150-measurements['°C'][$index-1].value*3}}" y2="{{150-x.value*3}}" stroke=red></line>
+		<circle cx="{{toX(x.hh, x.mm)}}" cy={{150-x.value*3}} r="{{3 + (x.value==minmax['°C'].min || x.value==minmax['°C'].max ? 1 : 0)}}" fill=red ng-repeat="x in measurements['°C']"><title>{{x.hh}}:{{x.mm}} {{x.value}}{{x.unit}}</title></circle>
+		<line x1="1" y1="{{150-minmax['°C'].min*3}}" x2="1" y2="{{150-minmax['°C'].max*3}}" stroke=red stroke-width=8><title>Temperature: {{minmax['°C'].min}}...{{minmax['°C'].max}}°C</title></line>
+
+		<!-- MinMax Icons TODO if multiple on same timestamp: next to eachother? map with time to array of minmax? -->
+		<text text-anchor=middle font-size=14 ng-repeat="(key,value) in minmax" x="{{toX(value.hhmin,value.mmmin)}}", y=225>{{unit2properties[key].icon}}<title>Minimum {{unit2properties[key].desc}} {{value.min}}{{key}} at {{formatTime(value.hhmin, value.mmmin)}}</title></text>
+		<text text-anchor=middle font-size=18 ng-repeat="(key,value) in minmax" x="{{toX(value.hhmax,value.mmmax)}}", y=225>{{unit2properties[key].icon}}<title>Maximum {{unit2properties[key].desc}} {{value.max}}{{key}} at {{formatTime(value.hhmax, value.mmmax)}}</title></text>
+	</svg>
+</div>
+
+<div class="right">
+	<svg width="100%" height={{graphheight}}>
+		<rect x=0 y=0 width=100% height=100% fill=lightgray></rect>
+		<text class="legend" x="100%" y="15">km/h</text>
+		<text ng-repeat="i in [30,60,90,120,150,180,210]" class="legend" x="100%" y={{i+5}}>{{2*(i-210)/-3}}</text>
+	</svg>
+</div>
+
+<table width="100%"><tr>
+	<td ng-repeat='(key,value) in minmax'>
+	<svg width="100%" height="5.8vw">
+		<rect x=0 y=0 width=100% height=100% fill=lightgray></rect>
+		<text x=0>
+			<tspan dy=1em font-size=2.5vw>{{unit2properties[key].icon}}</tspan>
+			<tspan x=50% dy="-1.5em" text-anchor="middle" font-size="1vw">{{unit2properties[key].desc}}</tspan>
+			<tspan x=50% dy="1em" text-anchor="middle" font-size=1.7vw>{{['min','mm'].indexOf(key)>=0 ? value.sum : measurements[key].at(-1).value }}{{key}}</tspan>
+		</text>
+		<text y=100% font-size="1vw">
+			<tspan x=3 dy=-1.6em>{{value.min}}{{key}}</tspan><tspan x=3 dy=1.2em font-weight="{{isCurrent(value.hhmin, value.mmmin)}}">{{formatTime(value.hhmin, value.mmmin)}}</tspan>
+		</text>
+		<text y=100% x=50% text-anchor="middle" font-size="1vw" ng-if="['min','mm'].indexOf(key)==-1">
+			<tspan dy=-0.4em>{{value.sum / value.count | number: 1}}{{key}}</tspan>
+		</text>
+		<text y=100% text-anchor="end" font-size="1vw">
+		<tspan x=100% dy=-1.6em>{{value.max}}{{key}}</tspan><tspan x=100% dy=1.2em font-weight="{{isCurrent(value.hhmax, value.mmmax)}}">{{formatTime(value.hhmax, value.mmmax)}}</tspan>
+		</text>
+	</svg>
+	</td>
+<tr></table>
+
+<!-- TODO List all stations, so we can see this page for all stations.
+     TODO when reloading all measurements, do not filter by station, so we can keep/update min/max for all stations and list top-3 of those under the 7 tiles?
+-->
+
+<script>
+var app = angular.module('myApp', []);
+app.controller('weatherController', 
+	function($scope, $http, $interval, $location) {
+		$scope.formatTime = function(hh, mm) {
+			if (typeof hh === "undefined") {
+				return "";
+			}
+			var result = hh + ":";
+			if (mm < 10) {
+				result += "0";
+			}
+			result += mm;
+			return result;
+		}
+
+		$scope.toX = function(hh, mm) { // {{100/24*(x.hh+x.mm/60)}}%
+			return 100/24*(hh+mm/60) + "%";
+		}
+
+		$scope.isCurrent = function(hh, mm) {
+//			return "Normal";
+			if (typeof hh === "undefined") {
+				return "Normal";
+			}
+			return ($scope.currenthh == hh && $scope.currentmm == mm) ? "Bold" : "Normal";
+		}
+
+		$scope.currentdate = new Date();
+		$scope.currenthh = 0;
+		$scope.currentmm = 0;
+		$scope.code = 'PSI'; // TODO Take from request parameter? Or just ask for all measurements of today, keeping them for all stations?
+		$scope.id = 0;
+
+		$scope.minmax = {
+			"°C":{"count":0, "sum":0},
+			"km/h":{"count":0, "sum":0},
+			"%":{"count":0, "sum":0},
+			"hPa":{"count":0, "sum":0},
+			"W/m²":{"count":0, "sum":0},
+			"min":{"count":0, "sum":0},
+			"mm":{"count":0, "sum":0}
+		};
+		$scope.globalminmax = {
+			"°C":{},
+			"km/h":{},
+			"%":{},
+			"hPa":{},
+			"W/m²":{},
+			"min":{},
+			"mm":{}
+		};
+		$scope.unit2properties = {
+			"°C":{"desc":"Temperature", "icon":"🌡"},
+			"km/h":{"desc":"Windspeed", "icon":"💨"},
+			"%":{"desc":"Humidity", "icon":"💧"}, 
+			"hPa":{"desc":"Pressure", "icon":"⏲"},
+			"W/m²":{"desc":"Radiation", "icon":"🔆"}, 
+			"min":{"desc":"Sunshine", "icon":"🌞"},
+			"mm":{"desc":"Precipitation", "icon":"🌧"}
+		};
+
+		$scope.legendwidth = 45;
+		$scope.graphheight = 244;
+
+		$scope.measurements = {"%":[], "°C":[],"hPa":[], "km/h":[], "W/m²":[], "min":[], "mm": []};
+		retrieveMeasurements($scope, $http);
+		$interval(function() {retrieveMeasurements($scope, $http)}, 60000);
+	}
+);
+
+function retrieveMeasurements($scope, $http) {
+	let url = "stationmeasurements.pl?code=" + $scope.code + "&id=" + $scope.id;
+	$http.get(url).then(function (response) {
+		for (m of response.data) {
+			$scope.id = Math.max($scope.id, m.id);
+			if (m.hh < $scope.hh) { // New day started
+				$scope.currentdate = new Date();
+				$scope.measurements =  {"%":[], "°C":[],"hPa":[], "km/h":[], "W/m²":[], "min":[], "mm": []};
+				$scope.minmax =  $scope.minmax = {
+		                        "°C":{"count":0, "sum":0},
+       			                "km/h":{"count":0, "sum":0},
+                       			"%":{"count":0, "sum":0},
+		                        "hPa":{"count":0, "sum":0},
+                       			"W/m²":{"count":0, "sum":0},
+		                        "min":{"count":0, "sum":0},
+		                        "mm":{"count":0, "sum":0}
+                		};
+			}
+			if ((m.hh + m.mm / 60) > ($scope.currenthh + $scope.currentmm / 60)) {
+				$scope.currenthh = m.hh;
+				$scope.currentmm = m.mm;
+			}
+
+			if (m.code == $scope.code) {
+				$scope.measurements[m.unit].push(m);
+				for (entry in $scope.minmax) {
+					if (m.unit === entry) {
+						if (!$scope.minmax[entry].min || m.value < $scope.minmax[entry].min) {
+							$scope.minmax[entry].min = m.value;
+							$scope.minmax[entry].hhmin = m.hh;
+							$scope.minmax[entry].mmmin = m.mm;
+						}
+						if (!$scope.minmax[entry].max || m.value >= $scope.minmax[entry].max) {
+							$scope.minmax[entry].max = m.value;
+							$scope.minmax[entry].hhmax = m.hh;
+							$scope.minmax[entry].mmmax = m.mm;
+						}
+						$scope.minmax[entry].count++;
+						$scope.minmax[entry].sum += m.value;
+					}
+				}
+			}
+//			for (entry in $scope.globalminmax) {
+//				if (m.unit === entry) {
+//					if (!$scope.globalminmax[entry][m.code].min || m.value < $scope.globalminmax[entry][m.code].min) {
+//						$scope.globalminmax[entry][m.code].min = m.value;
+//						$scope.globalminmax[entry][m.code].hhmin = m.hh;
+//						$scope.globalminmax[entry][m.code].mmmin = m.mm;
+//					}
+//					if (!$scope.globalminmax[entry][m.code].max || m.value >= $scope.globalminmax[entry][m.code].max) {
+//						$scope.globalminmax[entry][m.code].max = m.value;
+//						$scope.globalminmax[entry][m.code].hhmax = m.hh;
+//						$scope.globalminmax[entry][m.code].mmmax = m.mm;
+//					}
+//				}
+//			}
+		}
+	});
+}
+</script>
+
+</body>
+</html> 
