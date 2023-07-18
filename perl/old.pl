@@ -81,7 +81,7 @@ my $dbh = DBI->connect("dbi:Pg:dbname=meteo;host=127.0.0.1","meteo","meteo");
 
 
 # Temperature graphic (TODO nicer!!)
-my $query = read_file('/home/varienaja/workspace/meteo/perl/combined_station_measurements.sql');
+my $query = read_file('/home/varienaja/workspace/meteo/perl/combined_station_measurements2.sql');
 my $sth = $dbh->prepare($query);
 $sth->bind_param(1, "$location");
 my $moment;
