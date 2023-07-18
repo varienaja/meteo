@@ -64,7 +64,7 @@ div {
 }
 </style>
 
-<h2>Measurements in {{code}} on {{currentdate | date:'dd-MM-yyyy'}} {{formatTime(currenthh, currentmm)}}</h2>
+<h2>Measurements in {{code}} on {{currentdate | date:'dd-MM-yyyy'}} {{formatTime(currenthh, currentmm)}} {{forecastlocation}}</h2>
 
 <!-- SVG -->
 
@@ -117,6 +117,12 @@ div {
 		<line ng-repeat="x in measurements['°C']" ng-hide="$first" x1="{{toX(measurements['°C'][$index-1].hh, measurements['°C'][$index-1].mm)}}" x2="{{toX(x.hh,x.mm)}}" y1="{{150-measurements['°C'][$index-1].value*3}}" y2="{{150-x.value*3}}" stroke=red></line>
 		<circle cx="{{toX(x.hh, x.mm)}}" cy={{150-x.value*3}} r="{{3 + (x.value==minmax['°C'].min || x.value==minmax['°C'].max ? 1 : 0)}}" fill=red ng-repeat="x in measurements['°C']"><title>{{formatTime(x.hh, x.mm)}} {{x.value}}{{x.unit}}</title></circle>
 		<line x1="1" y1="{{150-minmax['°C'].min*3}}" x2="1" y2="{{150-minmax['°C'].max*3}}" stroke=red stroke-width=8><title>Temperature: {{minmax['°C'].min}}...{{minmax['°C'].max}}°C</title></line>
+		<!-- Temperature forecast -->
+		<line x1="{{toX(measurements['°C'].at(-1).hh, measurements['°C'].at(-1).mm)}}" x2="{{toXUnix(forecast.temperature[0][0])}}" y1="{{150-measurements['°C'].at(-1).value*3}}" y2="{{150-forecast.temperature[0][1]*3}}" stroke=brown></line> <!-- connect measurement with forecast -->
+		<line ng-repeat="x in forecast.temperature" ng-hide="$first" x1="{{toXUnix(forecast.temperature[$index-1][0])}}" x2="{{toXUnix(x[0])}}" y1="{{150-forecast.temperature[$index-1][1]*3}}" y2="{{150-x[1]*3}}" stroke=brown></line>
+		<circle cx="{{toXUnix(x[0])}}" cy={{150-x[1]*3}} r="3" fill=brown ng-repeat="x in forecast.temperature"><title>Prediction: {{x[1]}}°C</title></circle>
+
+
 	</svg>
 </div>
 
@@ -146,16 +152,35 @@ div {
 		</text>
 
 		<text y=100% font-size=1vw>
-			<tspan x=3 dy=-1.6em>{{value.min}}{{key}}</tspan><tspan x=3 dy=1.2em font-weight="{{isCurrent(value.hhmin, value.mmmin)}}">{{formatTime(value.hhmin, value.mmmin)}}</tspan>
+			<tspan x=3 dy=-1.6em>{{value.min}}{{key}}</tspan><tspan x=3 dy=1.2em font-weight="{{isMin(key, measurements[key].at(-1).value) ? 'Bold' : 'Normal'}}">{{formatTime(value.hhmin, value.mmmin)}}</tspan>
 		</text>
 		<text y=100% x=50% text-anchor="middle" font-size=1vw ng-if="['min','mm'].indexOf(key)==-1">
 			<tspan dy=-0.4em>{{value.sum / value.count | number: 1}}{{key}}</tspan>
 		</text>
 		<text y=100% text-anchor="end" font-size=1vw>
-		<tspan x=100% dy=-1.6em>{{value.max}}{{key}}</tspan><tspan x=100% dy=1.2em font-weight="{{isCurrent(value.hhmax, value.mmmax)}}">{{formatTime(value.hhmax, value.mmmax)}}</tspan>
+		<tspan x=100% dy=-1.6em>{{value.max}}{{key}}</tspan><tspan x=100% dy=1.2em font-weight="{{isMax(key, measurements[key].at(-1).value) ? 'Bold' : 'Normal'}}">{{formatTime(value.hhmax, value.mmmax)}}</tspan>
 		</text>
 	</svg>
 </div></div>
+
+<h2>New records since yesterday</h2>
+<table>
+	<tr><th colspan=2>Type</th><th colspan=2>Station</th><th>m/m</th><th>Time</th><th colspan=2>Value</th><th>Age</th></tr>
+
+	<tr ng-repeat='r in records'>
+		<td align=center>{{unit2properties[r.unit].icon}}</td>
+		<td>{{unit2properties[r.unit].desc}}</td>
+		<td><a href="?code={{r.code}}">{{r.code}}</a></td>
+		<td>{{r.name}}</td>
+		<td>{{r.type}}</td>
+		<td>{{r.moment}}</td>
+		<td align=right>{{r.recordvalue}}</td>
+		<td>{{r.unit}}</td>
+		<td align=right>{{r.age}}</td>
+	</tr>
+</table>
+
+
 
 <script>
 var app = angular.module('myApp', []);
@@ -177,17 +202,28 @@ app.controller('weatherController',
 			return 100/24*(hh+mm/60) + "%";
 		}
 
-		$scope.isCurrent = function(hh, mm) {
-			if (typeof hh === "undefined") {
-				return "Normal";
+		$scope.toXUnix = function(tt) {
+			var dd = new Date(tt);
+//			return toX(dd.getHours(), 0);
+			return 100/24*(dd.getHours()+dd.getMinutes()/60) + "%";
+//			return "50%"; // TODO
+		}
+
+		$scope.isMin = function(key, value) { //
+			if (typeof value === "undefined") {
+				return false;
 			}
-			return ($scope.currenthh == hh && $scope.currentmm == mm) ? "Bold" : "Normal";
+			return $scope.minmax[key].min == value;
+		}
+
+		$scope.isMax = function(key, value) { //
+			if (typeof value === "undefined") {
+				return false;
+			}
+			return $scope.minmax[key].max == value;
 		}
 
 		$scope.formatTile = function(key, sum, value) {
-			if (typeof sum === "undefined" || typeof value === "undefined") {
-				return "-";
-			}
 			if (key === "mm") {
 				return sum.toFixed(1) + key;
 			}
@@ -200,8 +236,11 @@ app.controller('weatherController',
 			return value.toFixed(1) + key;
 		}
 
-		initDay($scope);
 		$scope.id = 0;
+		$scope.code = new URL(window.location).searchParams.get("code");
+		if (!$scope.code) {
+			$scope.code = "PSI"; // Default
+		}
 
 		$scope.unit2properties = {
 			"°C":{"desc":"Temperature", "colour":"red", "icon":"🌡"},
@@ -221,8 +260,9 @@ app.controller('weatherController',
 	}
 );
 
-function initDay($scope) {
+function initDay($scope, $http) {
 	$scope.currentdate = new Date();
+	$scope.currentdatestring = $scope.currentdate.toDateString();
 	$scope.currenthh = 0;
 	$scope.currentmm = 0;
 	$scope.minmax = {
@@ -244,21 +284,18 @@ function initDay($scope) {
 		"mm":{}
 	};
 	$scope.measurements = {"%":[], "°C":[],"hPa":[], "km/h":[], "W/m²":[], "min":[], "mm": []};
-	$scope.code = new URL(window.location).searchParams.get("code");
-	if (!$scope.code) {
-		$scope.code = "PSI"; // Default
-	}
+	retrieveDailyRecords($scope, $http);
+	retrieveForecast($scope, $http);
 }
 
 function retrieveMeasurements($scope, $http) {
 	let url = "stationmeasurements.pl?code=" + $scope.code + "&id=" + $scope.id;
 	$http.get(url).then(function (response) {
+		if ($scope.currentdatestring != new Date().toDateString()) {
+			initDay($scope, $http);
+		}
 		for (m of response.data) {
 			$scope.id = Math.max($scope.id, m.id);
-			if (m.hh < $scope.hh) { // TODO Fix new day detection: measurements are not handled in order!?
-				alert("new day");
-				initDay($scope);
-			}
 			if ((m.hh + m.mm / 60) > ($scope.currenthh + $scope.currentmm / 60)) {
 				$scope.currenthh = m.hh;
 				$scope.currentmm = m.mm;
@@ -283,6 +320,8 @@ function retrieveMeasurements($scope, $http) {
 					}
 				}
 			}
+			document.title = "Meteo " + $scope.code + " on " + $scope.formatTime($scope.currenthh, $scope.currentmm);
+
 //			for (entry in $scope.globalminmax) {
 //				if (m.unit === entry) {
 //					if (!$scope.globalminmax[entry][m.code].min || m.value < $scope.globalminmax[entry][m.code].min) {
@@ -299,7 +338,40 @@ function retrieveMeasurements($scope, $http) {
 //			}
 		}
 	});
+	trimForecast($scope);
 }
+
+function retrieveDailyRecords($scope, $http) {
+	let url = "newrecords.pl";
+	$http.get(url).then(function (response) {
+		$scope.records = response.data;
+	});
+}
+
+function retrieveForecast($scope, $http) {
+	let url = "forecast.pl";
+	$http.get(url).then(function (response) {
+		$scope.forecast = response.data[0]; 
+
+		//TODO do this for 'rainfall', 'wind', 'sunshine',
+
+		// add first sample from next day to this forecast, so we see data until 24:00 instead of until 23:00
+		$scope.forecast.temperature.push(response.data[1].temperature[0]);
+		$scope.forecast.temperature.at(-1)[0] -= 1; // Make date be on 'today' instead of 'tomorrow' by substracting 1 millisecond
+		trimForecast($scope);
+	});
+}
+
+function trimForecast($scope) {
+	// Remove predictions older than current time.
+	if ($scope.forecast) {
+		let compDate = new Date();
+		$scope.forecast.temperature = $scope.forecast.temperature.filter(
+			sample => new Date(sample[0]) >= compDate
+		);
+	}
+}
+
 </script>
 
 </body>
