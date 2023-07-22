@@ -109,10 +109,14 @@ div {
 			<g fill=blue opacity=40%>
 				<rect x="{{toXUnix(x[0])}}" y="202" height={{x[1]*60}} width=".5%" ng-repeat="x in forecast.rainfall"><title>Prediction: {{x[1]}}mm rainfall</title></rect>
 			</g>
+
+			<!-- sunset + sunrise -->
+			<text text-anchor=middle x={{toXUnix(forecast.sunrise)}} y=222>🔺<title>Sunrise {{toTimeUnix(forecast.sunrise)}}</title></text>
+			<text text-anchor=middle x={{toXUnix(forecast.sunset)}} y=222>🔻<title>Sunset {{toTimeUnix(forecast.sunset)}}</title></text>
 		</g>
 
 
-		<!-- Sunshine -->
+		<!-- Sunshine --> <!-- TODO shift sunhine left for (10-value)/2 minutes, so the bars are nicely centered around the timestamp -->
 		<rect x="{{100/24*(x.hh+x.mm/60) - 1/3}}%" y="202" height="8" width="{{x.value/14.4}}%" fill=yellow ng-repeat="x in measurements['min']"><title>{{formatTime(x.hh, x.mm)}} {{x.value}}{{x.unit}}</title></rect>
 
 		<!-- Radiation -->
@@ -229,9 +233,12 @@ app.controller('weatherController',
 
 		$scope.toXUnix = function(tt) {
 			var dd = new Date(tt);
-//			return toX(dd.getHours(), 0);
 			return 100/24*(dd.getHours()+dd.getMinutes()/60) + "%";
-//			return "50%"; // TODO
+		}
+
+		$scope.toTimeUnix = function(tt) {
+			var dd = new Date(tt);
+			return $scope.formatTime(dd.getHours(), dd.getMinutes());
 		}
 
 		$scope.isMin = function(key, value) { //
@@ -276,7 +283,7 @@ app.controller('weatherController',
 			"%":{"desc":"Humidity", "colour": "deepskyblue", "icon":"💧"}, 
 			"hPa":{"desc":"Pressure", "colour": "black", "icon":"⏲"},
 			"W/m²":{"desc":"Radiation", "colour": "orange", "icon":"🔆"}, 
-			"min":{"desc":"Sunshine", "colour": "yellow", "icon":"🌞"},
+			"min":{"desc":"Sunshine", "colour": "yellow", "icon":"☀️"},
 			"mm":{"desc":"Precipitation", "colour": "blue", "icon":"🌧"}
 		};
 
@@ -365,8 +372,8 @@ function retrieveMeasurements($scope, $http) {
 //				}
 //			}
 		}
+		trimForecast($scope);
 	});
-	trimForecast($scope);
 }
 
 function retrieveDailyRecords($scope, $http) {
@@ -406,16 +413,16 @@ function trimForecast($scope) {
 		let compDate = new Date();
 		compDate.setHours($scope.currenthh, $scope.currentmm, 0, 0);
 		$scope.forecast.temperature = $scope.forecast.temperature.filter(
-			sample => new Date(sample[0]) >= compDate
+			sample => new Date(sample[0]) > compDate
 		);
 		$scope.forecast.sunshine = $scope.forecast.sunshine.filter(
-			sample => new Date(sample[0]) >= compDate
+			sample => new Date(sample[0]) > compDate
 		);
 		$scope.forecast.rainfall = $scope.forecast.rainfall.filter(
-			sample => new Date(sample[0]) >= compDate
+			sample => new Date(sample[0]) > compDate
 		);
 		$scope.forecast.wind.data = $scope.forecast.wind.data.filter(
-			sample => new Date(sample[0]) >= compDate
+			sample => new Date(sample[0]) > compDate
 		);
 	}
 }
