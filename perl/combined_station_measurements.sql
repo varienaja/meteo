@@ -24,7 +24,7 @@ combined as (
   select m.id, s.id as sensor_id, s.code, m.moment, m.value, s.unit 
   from combined m, sensor s 
   where s.id=m.sensor_id and m.moment>=current_date
-  order by s.unit desc, m.moment
+  order by m.moment
 )
 select array_to_json(array_agg(json_build_object('id', id, 'sensor_id', sensor_id, 'code', code, 'value', value, 'unit', unit, 'hh', extract(hour from moment), 'mm', extract(minute from moment)))) 
 from final 
